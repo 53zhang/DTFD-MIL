@@ -61,10 +61,10 @@ def main():
 
     in_chn = 1024
 
-    classifier = Classifier_1fc(params.mDim, params.num_cls, params.droprate).to(params.device)
-    attention = Attention(params.mDim).to(params.device)
-    dimReduction = DimReduction(in_chn, params.mDim, numLayer_Res=params.numLayer_Res).to(params.device)
-    attCls = Attention_with_Classifier(L=params.mDim, num_cls=params.num_cls, droprate=params.droprate_2).to(params.device)
+    classifier = Classifier_1fc(params.mDim, params.num_cls, params.droprate).to(params.device)  # 分类层，固定维度512到类别得分2。
+    attention = Attention(params.mDim).to(params.device)  # 注意力机制，从切片的所有图像块的固定维度表示到切片表示，然后得到切片分类得分。
+    dimReduction = DimReduction(in_chn, params.mDim, numLayer_Res=params.numLayer_Res).to(params.device)  # 相当于降维层，从输入：特征提取器的输出 到固定维度512.这里其实并没有实现残差层。
+    attCls = Attention_with_Classifier(L=params.mDim, num_cls=params.num_cls, droprate=params.droprate_2).to(params.device)  # 注意力机制，从切片的所有图像块的固定维度表示到切片表示，然后得到切片分类得分。
 
     if params.isPar:
         classifier = torch.nn.DataParallel(classifier)

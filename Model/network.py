@@ -15,7 +15,7 @@ class Classifier_1fc(nn.Module):
 
         if self.droprate != 0.0:
             x = self.dropout(x)
-        x = self.fc(x)
+        x = self.fc(x)  # 分类层输出类别得分
         return x
 
 

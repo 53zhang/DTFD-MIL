@@ -30,7 +30,7 @@ class residual_block(nn.Module):
             )
     def forward(self, x):
         tt = self.block(x)
-        x = x + tt
+        x = x + tt  # 残差连接：原始输入+特征变换为输入=输出
         return x
 
 

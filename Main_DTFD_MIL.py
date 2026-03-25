@@ -335,9 +335,9 @@ def train_attention_preFeature_DTFD(mDATA_list, classifier, dimReduction, attent
                 topk_idx_min = sort_idx[-instance_per_group:].long()  # 取正类概率最低的后几个 patch：
                 topk_idx = torch.cat([topk_idx_max, topk_idx_min], dim=0)  # 既保留最强阳性 patch，也保留最强阴性 patch
 
-                MaxMin_inst_feat = tmidFeat.index_select(dim=0, index=topk_idx)   ##########################
-                max_inst_feat = tmidFeat.index_select(dim=0, index=topk_idx_max)
-                af_inst_feat = tattFeat_tensor
+                MaxMin_inst_feat = tmidFeat.index_select(dim=0, index=topk_idx)  # 每个组内：从原始 patch 特征 tmidFeat 中，把：top-k 最像正类的 patch、top-k 最不像正类的 patch都取出来。
+                max_inst_feat = tmidFeat.index_select(dim=0, index=topk_idx_max)  # 每个组内只取最像正类的几个 patch。
+                af_inst_feat = tattFeat_tensor  # 组表示
 
                 if distill == 'MaxMinS':
                     slide_pseudo_feat.append(MaxMin_inst_feat)

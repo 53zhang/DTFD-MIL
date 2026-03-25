@@ -19,7 +19,7 @@ class Attention2(nn.Module):
 
     def forward(self, x, isNorm=True):
         ## x: N x L
-        A = self.attention(x)  ## N x K
+        A = self.attention(x)  ## N x K  
         A = torch.transpose(A, 1, 0)  # KxN
         if isNorm:
             A = F.softmax(A, dim=1)  # softmax over N
@@ -65,7 +65,7 @@ class Attention_with_Classifier(nn.Module):
         self.attention = Attention_Gated(L, D, K)
         self.classifier = Classifier_1fc(L, num_cls, droprate)
     def forward(self, x): ## x: N x L
-        AA = self.attention(x)  ## K x N
-        afeat = torch.mm(AA, x) ## K x L
-        pred = self.classifier(afeat) ## K x num_cls
+        AA = self.attention(x)  ## K x N  # 每个实例的注意力得分
+        afeat = torch.mm(AA, x) ## K x L  # 加权求和得到切片级表示
+        pred = self.classifier(afeat) ## K x num_cls  # 对切片级表示进行分类
         return pred

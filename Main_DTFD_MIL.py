@@ -96,13 +96,14 @@ def main():
 
     print_log(f'training slides: {len(SlideNames_train)}, validation slides: {len(SlideNames_val)}, test slides: {len(SlideNames_test)}', log_file)
 
+    # 这三个是一个优化器：分类是（）（所有图像块表示-所有图像块类别得分）（降维层：输入-固定维度-特征变换丰富特征表示）
     trainable_parameters = []
     trainable_parameters += list(classifier.parameters())
     trainable_parameters += list(attention.parameters())
     trainable_parameters += list(dimReduction.parameters())
 
     optimizer_adam0 = torch.optim.Adam(trainable_parameters, lr=params.lr,  weight_decay=params.weight_decay)
-    optimizer_adam1 = torch.optim.Adam(attCls.parameters(), lr=params.lr,  weight_decay=params.weight_decay)
+    optimizer_adam1 = torch.optim.Adam(attCls.parameters(), lr=params.lr,  weight_decay=params.weight_decay)  # （切片级所有实例--切片级表示--切片级得分）
 
     scheduler0 = torch.optim.lr_scheduler.MultiStepLR(optimizer_adam0, epoch_step, gamma=params.lr_decay_ratio)
     scheduler1 = torch.optim.lr_scheduler.MultiStepLR(optimizer_adam1, epoch_step, gamma=params.lr_decay_ratio)
@@ -269,6 +270,7 @@ def test_attention_DTFD_preFeat_MultipleMean(mDATA_list, classifier, dimReductio
     return auc_1
 
 
+# 详细看一下这部分代码
 def train_attention_preFeature_DTFD(mDATA_list, classifier, dimReduction, attention, UClassifier,  optimizer0, optimizer1, epoch, ce_cri=None, params=None,
                                           f_log=None, writer=None, numGroup=3, total_instance=3, distill='MaxMinS'):
 
@@ -279,7 +281,7 @@ def train_attention_preFeature_DTFD(mDATA_list, classifier, dimReduction, attent
     attention.train()
     UClassifier.train()
 
-    instance_per_group = total_instance // numGroup
+    instance_per_group = total_instance // numGroup  # 每个分组的实例数量
 
     Train_Loss0 = AverageMeter()
     Train_Loss1 = AverageMeter()
@@ -316,21 +318,22 @@ def train_attention_preFeature_DTFD(mDATA_list, classifier, dimReduction, attent
             for tindex in index_chunk_list:
                 slide_sub_labels.append(tslideLabel)
                 subFeat_tensor = torch.index_select(tfeat_tensor, dim=0, index=torch.LongTensor(tindex).to(params.device))
-                tmidFeat = dimReduction(subFeat_tensor)
-                tAA = attention(tmidFeat).squeeze(0)
-                tattFeats = torch.einsum('ns,n->ns', tmidFeat, tAA)  ### n x fs
-                tattFeat_tensor = torch.sum(tattFeats, dim=0).unsqueeze(0)  ## 1 x fs
-                tPredict = classifier(tattFeat_tensor)  ### 1 x 2
+                tmidFeat = dimReduction(subFeat_tensor)  # 每个分组：实例降维：输入维度--固定维度--特征变换学习丰富特征表示，此时输出512维度
+                tAA = attention(tmidFeat).squeeze(0)  # 每个分组内实例的注意力得分
+                tattFeats = torch.einsum('ns,n->ns', tmidFeat, tAA)  ### n x fs  # 每个分组内加权注意力得分后的实例表示
+                tattFeat_tensor = torch.sum(tattFeats, dim=0).unsqueeze(0)  ## 1 x fs  # 每个分组的组表示
+                tPredict = classifier(tattFeat_tensor)  ### 1 x 2  # 每个分组的类别得分
                 slide_sub_preds.append(tPredict)
 
+                # 利用当前 classifier 的权重，给组内每个 patch 一个类别分数。
                 patch_pred_logits = get_cam_1d(classifier, tattFeats.unsqueeze(0)).squeeze(0)  ###  cls x n
                 patch_pred_logits = torch.transpose(patch_pred_logits, 0, 1)  ## n x cls
                 patch_pred_softmax = torch.softmax(patch_pred_logits, dim=1)  ## n x cls
 
-                _, sort_idx = torch.sort(patch_pred_softmax[:,-1], descending=True)
-                topk_idx_max = sort_idx[:instance_per_group].long()
-                topk_idx_min = sort_idx[-instance_per_group:].long()
-                topk_idx = torch.cat([topk_idx_max, topk_idx_min], dim=0)
+                _, sort_idx = torch.sort(patch_pred_softmax[:,-1], descending=True)  # 每个 patch 属于正类的概率，然后从大到小排序。
+                topk_idx_max = sort_idx[:instance_per_group].long()  # 取正类概率最高的前几个 patch：
+                topk_idx_min = sort_idx[-instance_per_group:].long()  # 取正类概率最低的后几个 patch：
+                topk_idx = torch.cat([topk_idx_max, topk_idx_min], dim=0)  # 既保留最强阳性 patch，也保留最强阴性 patch
 
                 MaxMin_inst_feat = tmidFeat.index_select(dim=0, index=topk_idx)   ##########################
                 max_inst_feat = tmidFeat.index_select(dim=0, index=topk_idx_max)

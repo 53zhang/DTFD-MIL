@@ -42,17 +42,17 @@ class DimReduction(nn.Module):
         self.numRes = numLayer_Res
 
         self.resBlocks = []
-        for ii in range(numLayer_Res):
+        for ii in range(numLayer_Res):  # 遍历多少次residual_block
             self.resBlocks.append(residual_block(m_dim))
         self.resBlocks = nn.Sequential(*self.resBlocks)
 
     def forward(self, x):
 
-        x = self.fc1(x)
-        x = self.relu1(x)
+        x = self.fc1(x)  # 映射到固定维度512
+        x = self.relu1(x)  # 非线性映射增加复杂性
 
         if self.numRes > 0:
-            x = self.resBlocks(x)
+            x = self.resBlocks(x)  # 多个残差映射得到新输出，形状与原始输入形状一致
 
         return x
 

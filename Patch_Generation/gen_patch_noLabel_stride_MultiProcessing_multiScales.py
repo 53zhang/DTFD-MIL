@@ -1,3 +1,4 @@
+# 从全视野病理切片（WSI）里，先自动找到组织区域，再按固定步长滑窗，把满足组织占比要求的 patch 裁出来并保存。
 import os
 import numpy as np
 import openslide

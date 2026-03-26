@@ -61,9 +61,13 @@ def main():
 
     in_chn = 1024
 
+    # 这一部分的作用：把每个 group 里的大量 patch 特征，压缩成少量“关键特征”，形成 slide 的 pseudo feature。
     classifier = Classifier_1fc(params.mDim, params.num_cls, params.droprate).to(params.device)  # 分类层，固定维度512到类别得分2。
     attention = Attention(params.mDim).to(params.device)  # AttentionGated注意力机制，从切片的所有图像块的固定维度表示到切片的所有图像块的类别得分。
     dimReduction = DimReduction(in_chn, params.mDim, numLayer_Res=params.numLayer_Res).to(params.device)  # 相当于降维层，从输入：特征提取器的输出 到固定维度512.这里其实并没有实现残差层。
+    
+    
+    # 这一部分的作用：第二层分类器再基于这些“蒸馏后的关键特征”做最终 slide 级分类。
     attCls = Attention_with_Classifier(L=params.mDim, num_cls=params.num_cls, droprate=params.droprate_2).to(params.device)  # 注意力机制，从切片的所有图像块的固定维度表示到切片表示，然后得到切片分类得分。
 
     if params.isPar:
@@ -320,12 +324,15 @@ def train_attention_preFeature_DTFD(mDATA_list, classifier, dimReduction, attent
                 subFeat_tensor = torch.index_select(tfeat_tensor, dim=0, index=torch.LongTensor(tindex).to(params.device))
                 tmidFeat = dimReduction(subFeat_tensor)  # 每个分组：实例降维：输入维度--固定维度--特征变换学习丰富特征表示，此时输出512维度
                 tAA = attention(tmidFeat).squeeze(0)  # 每个分组内实例的注意力得分
-                tattFeats = torch.einsum('ns,n->ns', tmidFeat, tAA)  ### n x fs  # 每个分组内加权注意力得分后的实例表示
+                tattFeats = torch.einsum('ns,n->ns', tmidFeat, tAA)  ### n x fs  # 每个分组内加权注意力得分后的实例表示，这个仅对每个实例特征做了一个加权。
                 tattFeat_tensor = torch.sum(tattFeats, dim=0).unsqueeze(0)  ## 1 x fs  # 每个分组的组表示
                 tPredict = classifier(tattFeat_tensor)  ### 1 x 2  # 每个分组的类别得分
                 slide_sub_preds.append(tPredict)
 
-                # 利用当前 classifier 的权重，给组内每个 patch 一个类别分数。
+                # 利用当前 classifier 的权重，给组内每个 patch 一个类别分数。（每个patch属于各个类别的概率，通过get_cam_1d实现）
+                """
+                如果一个组表示是所有patch加权和，那么分类分数可以近似分解到每个patch上，所以可以得到每个patch对各类别的'响应值'
+                """
                 patch_pred_logits = get_cam_1d(classifier, tattFeats.unsqueeze(0)).squeeze(0)  ###  cls x n
                 patch_pred_logits = torch.transpose(patch_pred_logits, 0, 1)  ## n x cls
                 patch_pred_softmax = torch.softmax(patch_pred_logits, dim=1)  ## n x cls
